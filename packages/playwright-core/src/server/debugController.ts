@@ -188,13 +188,16 @@ function wireListeners(recorder: Recorder, debugController: DebugController) {
   const languageGenerator = new JavaScriptLanguageGenerator(/* isPlaywrightTest */true);
 
   const actionsChanged = () => {
-    const { header, footer, text, actionTexts } = generateCode(collapseActions(actions), languageGenerator, {
+    const aa = collapseActions(actions);
+    const { header, footer, text, actionTexts } = generateCode(aa, languageGenerator, {
       browserName: 'chromium',
       launchOptions: {},
       contextOptions: {},
       generateExpectSignal: debugController._generateAutoExpect,
     });
-    debugController.emit(DebugController.Events.SourceChanged, { text, header, footer, actions: actionTexts });
+    const last = aa.length ? aa[aa.length - 1] : undefined;
+    const steps = last ? [{ frame: { pageGuid: last.pageGuid }, action: { ...last.action, signals: last.signals } }] : [];
+    debugController.emit(DebugController.Events.SourceChanged, { text, header, footer, actions: actionTexts, steps, actionIndex: aa.length - 1 });
   };
 
   recorder.on(RecorderEvent.ElementPicked, (elementInfo: ElementInfo) => {

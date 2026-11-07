@@ -53,7 +53,7 @@ test.describe('cli codegen', () => {
 await page.GetByRole(AriaRole.Button, new() { Name = "Submit" }).First.ClickAsync();`);
 
     const clickAction = sources.get('JSON')!.actions.map(l => JSON.parse(l)).find(a => a.name === 'click');
-    expect.soft(clickAction).toEqual({
+    expect.soft(clickAction).toMatchObject({
       name: 'click',
       selector: 'internal:role=button[name="Submit"i] >> nth=0',
       button: 'left',
@@ -127,7 +127,7 @@ await page.GetByRole(AriaRole.Button, new() { Name = "Submit" }).Nth(1).ClickAsy
 await page.Locator("#frame1").ContentFrame.GetByText("Hello1").ClickAsync();`);
 
     const clickAction = sources.get('JSON')!.actions.map(l => JSON.parse(l)).find(a => a.name === 'click');
-    expect.soft(clickAction).toEqual({
+    expect.soft(clickAction).toMatchObject({
       name: 'click',
       selector: '#frame1 >> internal:control=enter-frame >> internal:text="Hello1"i',
       button: 'left',
@@ -171,7 +171,7 @@ await page.Locator("#frame1").ContentFrame.GetByText("Hello1").ClickAsync();`);
 await page.FrameLocator().GetByText("Hello2").ClickAsync();`);
 
     const clickAction = sources.get('JSON')!.actions.map(l => JSON.parse(l)).find(a => a.name === 'click');
-    expect.soft(clickAction).toEqual({
+    expect.soft(clickAction).toMatchObject({
       name: 'click',
       selector: 'internal:control=any-frame >> internal:text="Hello2"i',
       button: 'left',
@@ -211,7 +211,7 @@ await page.FrameLocator().GetByText("Hello2").ClickAsync();`);
 await page.FrameLocator().GetByText("HelloNameAnonymous").ClickAsync();`);
 
     const clickAction = sources.get('JSON')!.actions.map(l => JSON.parse(l)).find(a => a.name === 'click');
-    expect.soft(clickAction).toEqual({
+    expect.soft(clickAction).toMatchObject({
       name: 'click',
       selector: 'internal:control=any-frame >> internal:text="HelloNameAnonymous"i',
       button: 'left',

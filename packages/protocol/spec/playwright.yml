@@ -155,6 +155,10 @@ DebugController:
         actions:
           type: array?
           items: string
+        steps:
+          type: array?
+          items: ScriptStep
+        actionIndex: int?
 
     paused:
       parameters:

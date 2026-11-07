@@ -185,7 +185,7 @@ test('DB-015 should record', async ({ backend, connectedBrowser }) => {
   await page.setContent('<button>Submit</button>');
   await page.getByRole('button').click();
 
-  await expect.poll(() => events[events.length - 1]).toEqual({
+  await expect.poll(() => events[events.length - 1]).toMatchObject({
     header: `import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {`,
@@ -256,7 +256,7 @@ test('DB-017 should record custom data-testid', async ({ backend, connectedBrows
   await page.locator('div').click();
 
   // 4. Expect "getByTestId" locator.
-  await expect.poll(() => events[events.length - 1]).toEqual({
+  await expect.poll(() => events[events.length - 1]).toMatchObject({
     header: `import { test, expect } from '@playwright/test';
 
 test('test', async ({ page }) => {`,

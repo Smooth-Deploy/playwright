@@ -38,8 +38,8 @@ export class DebugControllerDispatcher extends Dispatcher<DebugController, chann
       eventsHelper.addEventListener(this._object, DebugController.Events.InspectRequested, ({ selector, locator, ariaSnapshot }) => {
         this._dispatchEvent('inspectRequested', { selector, locator, ariaSnapshot });
       }),
-      eventsHelper.addEventListener(this._object, DebugController.Events.SourceChanged, ({ text, header, footer, actions }) => {
-        this._dispatchEvent('sourceChanged', ({ text, header, footer, actions }));
+      eventsHelper.addEventListener(this._object, DebugController.Events.SourceChanged, ({ text, header, footer, actions, steps, actionIndex }) => {
+        this._dispatchEvent('sourceChanged', ({ text, header, footer, actions, steps, actionIndex }));
       }),
       eventsHelper.addEventListener(this._object, DebugController.Events.Paused, ({ paused }) => {
         this._dispatchEvent('paused', ({ paused }));

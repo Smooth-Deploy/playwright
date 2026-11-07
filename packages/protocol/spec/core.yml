@@ -41,6 +41,50 @@ SDKLanguage:
   - java
   - csharp
 
+ScriptStep:
+  type: object
+  properties:
+    frame:
+      type: object
+      properties:
+        pageGuid: string
+    action:
+      type: object
+      properties:
+        name: string
+        selector: string?
+        text: string?
+        url: string?
+        key: string?
+        modifiers: int?
+        clickCount: int?
+        button: string?
+        position:
+          type: object?
+          properties:
+            x: float
+            y: float
+        options:
+          type: array?
+          items: string
+        files:
+          type: array?
+          items: string
+        substring: boolean?
+        value: string?
+        checked: boolean?
+        ariaSnapshot: string?
+        signals:
+          type: array?
+          items:
+            type: object
+            properties:
+              name: string
+              url: string?
+              popupAlias: string?
+              downloadAlias: string?
+              dialogAlias: string?
+
 Disposable:
   type: interface
 
