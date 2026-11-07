@@ -25,6 +25,8 @@ import { createGuid } from '@utils/crypto';
 import { debugMode } from '@utils/debug';
 import { debugLogger } from '@utils/debugLogger';
 import { currentZone } from '@utils/zones';
+import { server as coreServer } from 'playwright-core/lib/coreBundle';
+import { PNG } from 'playwright-core/lib/utilsBundle';
 import { buildErrorContext } from './errorContext';
 import { config, testType } from './common';
 import * as globals from './globals';
@@ -39,6 +41,8 @@ import type { BrowserContext as BrowserContextImpl } from '../../playwright-core
 import type { APIRequestContext as APIRequestContextImpl, NewContextOptions as APIRequestContextOptions } from '../../playwright-core/src/client/fetch';
 import type { ChannelOwner } from '../../playwright-core/src/client/channelOwner';
 import type { Page as PageImpl } from '../../playwright-core/src/client/page';
+import type { Frame as FrameImpl } from '../../playwright-core/src/client/frame';
+import type { ApiCallData } from '../../playwright-core/src/client/clientInstrumentation';
 import type { BrowserContext, BrowserContextOptions, LaunchOptions, Page, Tracing } from 'playwright-core';
 
 export { expect } from './matchers/expect';
@@ -73,22 +77,27 @@ type WorkerFixtures = PlaywrightWorkerArgs & PlaywrightWorkerOptions & {
 
 // Note: utility fixtures and _utilityTest are reused in electron package. Be mindful when changing them.
 type UtilityTestFixtures = Pick<TestFixtures, 'testIdAttribute' | 'request' | '_combinedContextOptions' | '_setupArtifacts'>;
-type UtilityWorkerFixtures = Pick<WorkerFixtures, 'playwright' | 'screenshot' | 'trace'>;
+type UtilityWorkerFixtures = Pick<WorkerFixtures, 'playwright' | 'screenshot' | 'trace' | 'launchOptions' | 'headless'>;
+const resultScreenshots = !!process.env.SD_SCREENSHOTS;
+const pauseOnFailure = !!process.env.SD_FAILURE_PAUSE;
+
 const utilityFixtures: Fixtures<UtilityTestFixtures, UtilityWorkerFixtures> = {
   playwright: [async ({}, use) => {
     await use(require('playwright-core'));
   }, { scope: 'worker', box: true }],
   screenshot: ['off', { scope: 'worker', option: true, box: true }],
   trace: ['off', { scope: 'worker', option: true, box: true }],
+  launchOptions: [{}, { scope: 'worker', option: true, box: true }],
+  headless: [({ launchOptions }, use) => use(launchOptions.headless ?? true), { scope: 'worker', option: true, box: true }],
   testIdAttribute: ['data-testid', { option: true, box: true }],
   _combinedContextOptions: [{}, { box: true }],
-  _setupArtifacts: [async ({ playwright, screenshot, _combinedContextOptions }, use, testInfo) => {
+  _setupArtifacts: [async ({ playwright, headless, screenshot, _combinedContextOptions }, use, testInfo) => {
     // This fixture has a separate zero-timeout slot to ensure that artifact collection
     // happens even after some fixtures or hooks time out.
     // Now that default test timeout is known, we can replace zero with an actual value.
     testInfo.setTimeout(testInfo.project.timeout);
 
-    const artifactsRecorder = new ArtifactsRecorder(playwright, tracing().artifactsDir(), screenshot);
+    const artifactsRecorder = new ArtifactsRecorder(playwright, tracing().artifactsDir(), screenshot, resultScreenshots, pauseOnFailure && !headless);
     await artifactsRecorder.willStartTest(testInfo as TestInfoImpl);
 
     const tracingGroupSteps: TestStepInternal[] = [];
@@ -107,6 +116,8 @@ const utilityFixtures: Fixtures<UtilityTestFixtures, UtilityWorkerFixtures> = {
         const isExpectCall = (channel.type === 'Frame' && channel.method === 'expect') || (channel.type === 'Page' && channel.method === 'expectScreenshot');
         if (zone && zone.category === 'expect' && isExpectCall) {
           data.callId = zone.stepId;
+          if (resultScreenshots && channel.params?.selector)
+            (data as any)._channel = channel;
           return;
         }
 
@@ -117,6 +128,8 @@ const utilityFixtures: Fixtures<UtilityTestFixtures, UtilityWorkerFixtures> = {
           category: 'pw:api',
           title: renderTitle(channel.type, channel.method, channel.params, data.title),
           subtitle: renderSubtitle(channel.type, channel.method, channel.params),
+          apiName: data.apiName,
+          channelMethod: `${channel.type}.${channel.method}`,
           params,
           group: getActionGroup({ type: channel.type, method: channel.method }),
         }, tracingGroupSteps[tracingGroupSteps.length - 1]);
@@ -127,8 +140,25 @@ const utilityFixtures: Fixtures<UtilityTestFixtures, UtilityWorkerFixtures> = {
         } else {
           data.userData = (error?: Error) => step.complete({ error });
         }
+
+        // Store channel for result screenshot capture in onApiCallEnd.
+        if (resultScreenshots && channel.params?.selector)
+          (data as any)._channel = channel;
       },
-      onApiCallEnd: data => {
+      onApiCallEnd: async data => {
+        // Capture result screenshot after action completes.
+        const channel = (data as any)._channel;
+        if (channel && !data.error) {
+          const testInfo = globals.currentTestInfo();
+          if (testInfo) {
+            try {
+              await captureResultScreenshot(channel, data, testInfo as TestInfoImpl);
+            } catch {
+              // Screenshot is best-effort, ignore errors
+            }
+          }
+        }
+
         const completeStep = data.userData as ((error?: Error) => void) | undefined;
         completeStep?.(data.error);
       },
@@ -210,9 +240,7 @@ export const _utilityTest: TestType<UtilityTestFixtures, UtilityWorkerFixtures> 
 const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures, UtilityTestFixtures, UtilityWorkerFixtures> = ({
   defaultBrowserType: ['chromium', { scope: 'worker', option: true, box: true }],
   browserName: [({ defaultBrowserType }, use) => use(defaultBrowserType), { scope: 'worker', option: true, box: true }],
-  headless: [({ launchOptions }, use) => use(launchOptions.headless ?? true), { scope: 'worker', option: true, box: true }],
   channel: [({ launchOptions }, use) => use(launchOptions.channel), { scope: 'worker', option: true, box: true }],
-  launchOptions: [{}, { scope: 'worker', option: true, box: true }],
   connectOptions: [async ({ _optionConnectOptions }, use) => {
     await use(connectOptionsFromEnv() || _optionConnectOptions);
   }, { scope: 'worker', option: true, box: true }],
@@ -417,7 +445,8 @@ const playwrightFixtures: Fixtures<TestFixtures, WorkerFixtures, UtilityTestFixt
       const videoOptions: BrowserContextOptions = captureVideo ? {
         recordVideo: {
           dir: tracing().artifactsDir(),
-          size: typeof video === 'string' ? undefined : video.size,
+          // Video locks the shared screencast size, so default it to the viewport to keep result screenshots at full resolution.
+          size: (typeof video === 'string' ? undefined : video.size) ?? (resultScreenshots ? (options?.viewport ?? _combinedContextOptions.viewport ?? undefined) : undefined),
           fps: typeof video === 'string' ? undefined : video.fps,
           showActions: show?.actions,
         }
@@ -724,12 +753,17 @@ class ArtifactsRecorder {
   _artifactsDir: string;
   private _startedCollectingArtifacts: symbol;
 
+  private _resultScreenshots: boolean;
   private _screenshotRecorder: SnapshotRecorder;
   private _pageSnapshot: string | undefined;
 
-  constructor(playwright: PlaywrightImpl, artifactsDir: string, screenshot: ScreenshotOption) {
+  private _pauseOnFailure: boolean;
+
+  constructor(playwright: PlaywrightImpl, artifactsDir: string, screenshot: ScreenshotOption, resultScreenshots: boolean, pauseOnFailure: boolean) {
     this._playwright = playwright;
     this._artifactsDir = artifactsDir;
+    this._resultScreenshots = resultScreenshots;
+    this._pauseOnFailure = pauseOnFailure;
     const screenshotOptions = typeof screenshot === 'string' ? undefined : screenshot;
     this._startedCollectingArtifacts = Symbol('startedCollectingArtifacts');
 
@@ -796,10 +830,60 @@ class ArtifactsRecorder {
 
   async didFinishTestFunction() {
     await this._screenshotRecorder.maybeCapture();
+
+    if (this._resultScreenshots && this._testInfo._isFailure()) {
+      try {
+        const page = this._playwright._allPages()[0];
+        if (page) {
+          const pngBuffer = await page._wrapApiCall(async () => {
+            return await page.screenshot({ type: 'png', timeout: 5000 });
+          }, { internal: true });
+          const safeTestId = this._testInfo.testId.replace(/[^a-zA-Z0-9_-]/g, '-');
+          const screenshotDir = path.join(process.cwd(), '.smoothdeploy-output', 'screenshots', safeTestId);
+          fs.mkdirSync(screenshotDir, { recursive: true });
+          fs.writeFileSync(path.join(screenshotDir, 'failure.png'), pngBuffer);
+        }
+      } catch {
+        // Best-effort
+      }
+    }
+
+    if (this._pauseOnFailure && this._testInfo._isFailure()) {
+      this._emitPauseOnFailure();
+      const page = this._playwright._allPages()[0];
+      if (page)
+        await page.pause();
+    }
+  }
+
+  private _emitPauseOnFailure() {
+    const findFailingPath = (steps: TestStepInternal[]): string[] => {
+      for (let i = steps.length - 1; i >= 0; i--) {
+        const step = steps[i];
+        const childPath = findFailingPath(step.steps);
+        if (childPath.length > 0)
+          return [step.title, ...childPath];
+        if (step.error)
+          return [step.title];
+      }
+      return [];
+    };
+    const stepPath = findFailingPath((this._testInfo as any)._steps);
+    const error = this._testInfo.errors[0];
+    // eslint-disable-next-line no-restricted-properties
+    process.stdout.write(`[SMOOTHDEPLOY_EVENT]${JSON.stringify({
+      event: 'pauseOnFailure',
+      testId: this._testInfo.testId,
+      testTitle: this._testInfo.titlePath.slice(1).join(' > '),
+      stepPath,
+      error: error ? { message: error.message ?? String(error) } : null,
+      timestamp: Date.now(),
+    })}\n`);
   }
 
   async didFinishTest() {
     await this.didFinishTestFunction();
+    await Promise.all(_pendingResultScreenshots.splice(0));
 
     const leftoverContexts = this._playwright._allContexts();
     const leftoverApiRequests = Array.from(this._playwright.request._contexts);
@@ -867,6 +951,97 @@ class ArtifactsRecorder {
       if (this._testInfo._tracing.traceOptions() && (tracing as any)[kTracingStarted])
         await tracing.stopChunk({ path: this._testInfo._tracing.maybeGenerateNextTraceRecordingPath() });
     }, { internal: true });
+  }
+
+}
+
+let _capturingResultScreenshot = false;
+const _pendingResultScreenshots: Promise<void>[] = [];
+const _screencastFrames = new WeakMap<PageImpl, { data?: Buffer, timestamp: number, onFrame?: () => void }>();
+
+async function latestScreencastFrame(page: PageImpl, size: { width: number, height: number } | null, after: number): Promise<Buffer | undefined> {
+  let state = _screencastFrames.get(page);
+  if (!state) {
+    const s: { data?: Buffer, timestamp: number, onFrame?: () => void } = { timestamp: 0 };
+    state = s;
+    _screencastFrames.set(page, s);
+    await page._wrapApiCall(() => page.screencast.start({
+      size: size ?? undefined,
+      quality: 90,
+      onFrame: frame => {
+        s.data = frame.data;
+        s.timestamp = frame.timestamp;
+        s.onFrame?.();
+      },
+    }), { internal: true });
+  }
+  const start = Date.now();
+  const deadline = () => start + (state.data ? 100 : 2000);
+  while ((!state.data || state.timestamp < after) && Date.now() < deadline()) {
+    await new Promise<void>(resolve => {
+      state.onFrame = resolve;
+      setTimeout(resolve, deadline() - Date.now());
+    });
+  }
+  return state.data;
+}
+
+async function captureResultScreenshot(channel: { type: string, method: string, params?: Record<string, any>, object?: any }, data: ApiCallData, testInfo: TestInfoImpl) {
+  if (_capturingResultScreenshot)
+    return;
+  _capturingResultScreenshot = true;
+  try {
+    const obj = channel.object;
+    if (!obj)
+      return;
+    const selector = channel.params?.selector;
+    if (!selector)
+      return;
+    // Resolve the page and frame from the channel owner.
+    // Use the original frame (not mainFrame) so iframe selectors resolve correctly.
+    const page: PageImpl | undefined = obj._type === 'Frame' ? obj.page() : obj._type === 'Page' ? obj : undefined;
+    if (!page)
+      return;
+    const frame: FrameImpl = obj._type === 'Frame' ? obj : page.mainFrame();
+
+    // Query element bounding box.
+    const box = await page._wrapApiCall(async () => {
+      const element = await frame.$(selector);
+      if (!element)
+        return null;
+      return await element.boundingBox();
+    }, { internal: true });
+    if (!box)
+      return;
+
+    // Query CSS viewport dimensions.
+    const cssViewport = await page._wrapApiCall(async () => {
+      return await frame.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    }, { internal: true }).catch(() => null);
+
+    const jpeg = await latestScreencastFrame(page, cssViewport, Date.now());
+    if (!jpeg)
+      return;
+
+    const safeTestId = testInfo.testId.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const safeStepId = (data.callId ?? 'unknown').replace(/[^a-zA-Z0-9_-]/g, '-');
+    const screenshotDir = path.join(process.cwd(), '.smoothdeploy-output', 'screenshots', safeTestId);
+
+    _pendingResultScreenshots.push(new Promise(resolve => setImmediate(resolve)).then(async () => {
+      const { full, cropped } = coreServer.compositeHighlight(jpeg, box, cssViewport);
+      await fs.promises.mkdir(screenshotDir, { recursive: true });
+      const encode = (image: { data: Buffer, width: number, height: number }) => {
+        const png = new PNG({ width: image.width, height: image.height });
+        png.data = image.data;
+        return PNG.sync.write(png);
+      };
+      await fs.promises.writeFile(path.join(screenshotDir, `${safeStepId}-page.png`), encode(full));
+      await fs.promises.writeFile(path.join(screenshotDir, `${safeStepId}-element.png`), encode(cropped));
+    }).catch(e => debugLogger.log('error', `failed to write result screenshot: ${e}`)));
+  } catch {
+    // Screenshot capture is best-effort; don't fail the test.
+  } finally {
+    _capturingResultScreenshot = false;
   }
 }
 

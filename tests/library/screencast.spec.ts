@@ -294,6 +294,24 @@ test('SC-015 start dispose stops recording', async ({ browser }, testInfo) => {
   await context.close();
 });
 
+test('video started after recorder grew the screencast keeps default size', async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ viewport: { width: 1000, height: 600 } });
+  const page = await context.newPage();
+  await page.setContent('<button>b</button>');
+  let recorded = false;
+  await (context as any)._enableRecorder({ mode: 'recording', recorderMode: 'api' }, { actionAdded: () => recorded = true });
+  await page.click('button');
+  await expect.poll(() => recorded).toBe(true);
+  const videoPath = testInfo.outputPath('grown-video.webm');
+  await page.screencast.start({ path: videoPath });
+  await page.evaluate(() => document.body.style.backgroundColor = 'red');
+  await ensureSomeFrames(page);
+  await page.screencast.stop();
+  const videoPlayer = new VideoPlayer(videoPath);
+  expect([videoPlayer.videoWidth, videoPlayer.videoHeight]).toEqual([800, 480]);
+  await context.close();
+});
+
 type Pixel = { r: number, g: number, b: number, alpha: number };
 type PixelPredicate = (pixel: Pixel) => boolean;
 

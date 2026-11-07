@@ -22,6 +22,7 @@ import type { BrowserContextOptions } from './types';
 
 // Instrumentation can mutate the data, for example assign the callId.
 export interface ApiCallData {
+  apiName: string;
   title?: string;
   frames: StackFrame[];
   userData: any;
@@ -33,8 +34,8 @@ export interface ClientInstrumentation {
   addListener(listener: ClientInstrumentationListener): void;
   removeListener(listener: ClientInstrumentationListener): void;
   removeAllListeners(): void;
-  onApiCallBegin(apiCall: ApiCallData, channel: { type: string, method: string, params?: Record<string, any> }): void;
-  onApiCallEnd(apiCall: ApiCallData): void;
+  onApiCallBegin(apiCall: ApiCallData, channel: { type: string, method: string, params?: Record<string, any>, object?: any }): void;
+  onApiCallEnd(apiCall: ApiCallData): Promise<void>;
   onWillPause(options: { keepTestTimeout: boolean }): void;
   onPage(page: Page): void;
 
@@ -47,8 +48,8 @@ export interface ClientInstrumentation {
 }
 
 export interface ClientInstrumentationListener {
-  onApiCallBegin?(apiCall: ApiCallData, channel: { type: string, method: string, params?: Record<string, any>  }): void;
-  onApiCallEnd?(apiCall: ApiCallData): void;
+  onApiCallBegin?(apiCall: ApiCallData, channel: { type: string, method: string, params?: Record<string, any>, object?: any }): void;
+  onApiCallEnd?(apiCall: ApiCallData): void | Promise<void>;
   onWillPause?(options: { keepTestTimeout: boolean }): void;
   onPage?(page: Page): void;
   runBeforeCreateBrowserContext?(options: BrowserContextOptions): Promise<void>;
@@ -75,6 +76,18 @@ export function createInstrumentation(): ClientInstrumentation {
         return async (...params: any[]) => {
           for (const listener of listeners)
             await (listener as any)[prop]?.(...params);
+        };
+      }
+      if (prop === 'onApiCallEnd') {
+        return async (...params: any[]) => {
+          for (const listener of listeners) {
+            try {
+              await (listener as any)[prop]?.(...params);
+            } catch {
+              // Listener errors must not prevent other listeners from running
+              // or replace the original API call error.
+            }
+          }
         };
       }
       if (prop.startsWith('on')) {

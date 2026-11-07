@@ -18,6 +18,8 @@
 import { assert } from '@isomorphic/assert';
 import { rewriteErrorMessage } from '@utils/stackTrace';
 import { eventsHelper } from '@utils/eventsHelper';
+import jpegjs from 'jpeg-js';
+import { PNG } from 'pngjs';
 import * as dialog from '../dialog';
 import * as dom from '../dom';
 import * as frames from '../frames';
@@ -272,7 +274,10 @@ export class CRPage implements PageDelegate {
     await this._mainFrameSession._client.send('Emulation.setDefaultBackgroundColorOverride', { color });
   }
 
-  async takeScreenshot(progress: Progress, format: 'png' | 'jpeg' | 'webp', documentRect: types.Rect | undefined, viewportRect: types.Rect | undefined, quality: number | undefined, fitsViewport: boolean, scale: 'css' | 'device'): Promise<Buffer> {
+  async takeScreenshot(progress: Progress, format: 'png' | 'jpeg' | 'webp', documentRect: types.Rect | undefined, viewportRect: types.Rect | undefined, quality: number | undefined, fitsViewport: boolean, scale: 'css' | 'device', plainViewport?: boolean): Promise<Buffer> {
+    const screencastShot = plainViewport ? await this._viewportScreenshotFromScreencast(progress, format, documentRect, viewportRect, quality) : undefined;
+    if (screencastShot)
+      return screencastShot;
     const { visualViewport, contentSize, cssContentSize } = await progress.race(this._mainFrameSession._client.send('Page.getLayoutMetrics'));
     if (!documentRect) {
       documentRect = {
@@ -300,6 +305,32 @@ export class CRPage implements PageDelegate {
       await progress.race(this._mainFrameSession._client.send('Emulation.setTouchEmulationEnabled', { enabled: true }));
     }
     return Buffer.from(result.data, 'base64');
+  }
+
+  // Page.captureScreenshot with a clip re-emulates the view for one frame when the headed
+  // window's physical scale differs from the emulated deviceScaleFactor 1 (HiDPI displays),
+  // which shows as a visible resize blip. Plain viewport screenshots take the latest
+  // screencast frame instead. Masks, styles and omitBackground stay on the capture path
+  // because a cached frame may predate them. See https://github.com/invm/playwright/issues/8.
+  private async _viewportScreenshotFromScreencast(progress: Progress, format: 'png' | 'jpeg' | 'webp', documentRect: types.Rect | undefined, viewportRect: types.Rect | undefined, quality: number | undefined): Promise<Buffer | undefined> {
+    if (documentRect || !viewportRect || format === 'webp')
+      return;
+    if (!this._browserContext._browser.options.headful)
+      return;
+    if ((this._mainFrameSession._metricsOverride?.deviceScaleFactor ?? 1) !== 1)
+      return;
+    const size = { width: viewportRect.width, height: viewportRect.height };
+    const frame = await progress.race(this._page.screencast.latestFrame(size, format === 'jpeg' ? quality ?? 80 : 90));
+    if (!frame)
+      return;
+    const { width, height, data } = jpegjs.decode(frame.buffer, { formatAsRGBA: true, useTArray: false }) as { data: Buffer, width: number, height: number };
+    if (width !== size.width || height !== size.height)
+      return;
+    if (format === 'jpeg')
+      return frame.buffer;
+    const png = new PNG({ width, height });
+    png.data = data;
+    return PNG.sync.write(png);
   }
 
   async getContentFrame(handle: dom.ElementHandle): Promise<frames.Frame | null> {

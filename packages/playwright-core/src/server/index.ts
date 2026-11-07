@@ -26,6 +26,7 @@ export { Request, Response } from './network';
 export { Page, Worker } from './page';
 export { createPlaywright } from './playwright';
 export { nullProgress } from './progress';
+export { compositeHighlight } from './screenshotCompositor';
 export { WebSocketTransport } from './transport';
 export { openTraceInBrowser, openTraceViewerApp, startTraceViewerServer, runTraceViewerApp, traceViewerPath } from './trace/viewer/traceViewer';
 

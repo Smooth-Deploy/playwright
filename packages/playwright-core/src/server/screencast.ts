@@ -32,6 +32,7 @@ export type ScreencastClient = {
   size?: types.Size;
   quality?: number;
   fps?: number;
+  fixedSize?: boolean;
 };
 
 type AnnotatePosition = 'top-left' | 'top' | 'top-right' | 'bottom-left' | 'bottom' | 'bottom-right';
@@ -51,6 +52,8 @@ export class Screencast implements InstrumentationListener {
   private _size: types.Size | undefined;
   private _lastFrame: types.ScreencastFrame | undefined;
   private _cursorPoint: types.Point | undefined;
+  private _quality: number | undefined;
+  private _fps: number | undefined;
 
   constructor(page: Page) {
     this.page = page;
@@ -115,6 +118,15 @@ export class Screencast implements InstrumentationListener {
     this._clients.set(client, new LongStandingScope());
     if (isFirst) {
       this._startScreencast(client.size, client.quality, client.fps);
+    } else if (client.fixedSize) {
+      const size = this._normalizeSize(client.size);
+      if (size.width !== this._size!.width || size.height !== this._size!.height) {
+        this.page.delegate.stopScreencast();
+        this._startScreencast(size, this._quality, this._fps);
+      }
+    } else if (this._shouldGrow(client.size)) {
+      this.page.delegate.stopScreencast();
+      this._startScreencast({ width: Math.max(this._size!.width, client.size!.width), height: Math.max(this._size!.height, client.size!.height) }, this._quality, this._fps);
     } else if (this._lastFrame) {
       // Deliver the cached last frame to the new client so it does not have
       // to wait for the next browser repaint. setTimeout(0) ensures the caller
@@ -139,23 +151,48 @@ export class Screencast implements InstrumentationListener {
       this._stopScreencast();
   }
 
-  private _startScreencast(size: types.Size | undefined, quality: number | undefined, fps: number | undefined) {
-    this._size = size;
-    if (!this._size) {
+  async latestFrame(size: types.Size, quality: number): Promise<types.ScreencastFrame | undefined> {
+    const after = Date.now();
+    let onFrame: (() => void) | undefined;
+    const client: ScreencastClient = { size, quality, onFrame: () => onFrame?.(), dispose: () => {} };
+    this.addClient(client);
+    try {
+      const deadline = after + (this._lastFrame ? 100 : 2000);
+      while ((!this._lastFrame || this._lastFrame.frameSwapWallTime < after) && Date.now() < deadline) {
+        await new Promise<void>(resolve => {
+          onFrame = resolve;
+          setTimeout(resolve, deadline - Date.now());
+        });
+      }
+      return this._lastFrame;
+    } finally {
+      this.removeClient(client);
+    }
+  }
+
+  private _shouldGrow(size: types.Size | undefined) {
+    if (!size || (size.width <= this._size!.width && size.height <= this._size!.height))
+      return false;
+    return ![...this._clients.keys()].some(client => client.fixedSize);
+  }
+
+  private _normalizeSize(size: types.Size | undefined): types.Size {
+    if (!size) {
       const viewport = this.page.browserContext._options.viewport || { width: 800, height: 600 };
       const scale = Math.min(1, 800 / Math.max(viewport.width, viewport.height));
-      this._size = {
+      size = {
         width: Math.floor(viewport.width * scale),
         height: Math.floor(viewport.height * scale)
       };
     }
-
     // Make sure both dimensions are even, ffmpeg's pad and crop filters round yuv420p frames down to even sizes.
-    this._size = {
-      width: this._size.width & ~1,
-      height: this._size.height & ~1
-    };
+    return { width: size.width & ~1, height: size.height & ~1 };
+  }
 
+  private _startScreencast(size: types.Size | undefined, quality: number | undefined, fps: number | undefined) {
+    this._size = this._normalizeSize(size);
+    this._quality = quality;
+    this._fps = fps;
     this.page.delegate.startScreencast({
       width: this._size.width,
       height: this._size.height,

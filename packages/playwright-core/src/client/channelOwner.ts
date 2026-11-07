@@ -168,7 +168,7 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
                 if (!apiZone.internal && !apiZone.reported) {
                   // Reporting/tracing/logging this api call for the first time.
                   apiZone.reported = true;
-                  this._instrumentation.onApiCallBegin(apiZone, { type: this._type, method: prop, params });
+                  this._instrumentation.onApiCallBegin(apiZone, { type: this._type, method: prop, params, object: this });
                   logApiCall(this._logger, `=> ${apiZone.apiName} started`);
                   return await this._connection.sendMessageToServer(this, prop, validatedParams, { ...apiZone, signal, timeout });
                 }
@@ -202,7 +202,7 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
       const result = await currentZone().with('apiZone', apiZone).run(async () => await func(apiZone));
       if (!options?.internal) {
         logApiCall(logger, `<= ${apiZone.apiName} succeeded`);
-        this._instrumentation.onApiCallEnd(apiZone);
+        await this._instrumentation.onApiCallEnd(apiZone);
       }
       return result;
     } catch (e) {
@@ -217,7 +217,7 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
       if (!options?.internal) {
         apiZone.error = e;
         logApiCall(logger, `<= ${apiZone.apiName} failed`);
-        this._instrumentation.onApiCallEnd(apiZone);
+        await this._instrumentation.onApiCallEnd(apiZone).catch(() => {});
       }
       throw e;
     }
