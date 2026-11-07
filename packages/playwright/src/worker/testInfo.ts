@@ -44,6 +44,8 @@ interface TestStepData {
   subtitle?: string;
   category: TestStepCategory;
   stack?: StackFrame[];
+  apiName?: string;
+  channelMethod?: string;
   params?: Record<string, any>;
   box?: boolean;
   // steps with any defined group are hidden from the report
@@ -385,6 +387,8 @@ export class TestInfoImpl implements TestInfo {
         params: toReportedParams(step.params),
         wallTime: Date.now(),
         location: step.stack[0],
+        apiName: step.apiName,
+        channelMethod: step.channelMethod,
       };
       this._callbacks.onStepBegin(payload);
     }

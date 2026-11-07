@@ -31,6 +31,7 @@ import type { ProcessExitData } from './processHost';
 import type { TestRun } from './tasks';
 import type { TestGroup } from './testGroups';
 import type { TestError, TestResult, TestStep } from '../../types/testReporter';
+import type { ReporterStepFields } from '../common/ipc';
 
 export type EnvByProjectId = Map<string, Record<string, string | undefined>>;
 
@@ -403,7 +404,7 @@ class JobDispatcher {
     }
     const { result, steps, test } = data;
     const parentStep = params.parentStepId ? steps.get(params.parentStepId) : undefined;
-    const step: TestStep = {
+    const step: TestStep & ReporterStepFields = {
       title: params.title,
       subtitle: params.subtitle,
       titlePath: () => {
@@ -419,6 +420,9 @@ class JobDispatcher {
       attachments: [],
       annotations: [],
       location: params.location,
+      _stepId: params.stepId,
+      _apiName: params.apiName,
+      _channelMethod: params.channelMethod,
     };
     steps.set(params.stepId, step);
     (parentStep || result).steps.push(step);

@@ -248,6 +248,8 @@ export function stripAnsi(str: string): string {
 export function inheritAndCleanEnv(env: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    SD_SCREENSHOTS: undefined,
+    SD_FAILURE_PAUSE: undefined,
     // BEGIN: Reserved CI
     CI: undefined,
     BUILD_URL: undefined,

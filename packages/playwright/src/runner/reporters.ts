@@ -31,6 +31,7 @@ import LineReporter from '../reporters/line';
 import ListReporter from '../reporters/list';
 import ListModeReporter from '../reporters/listModeReporter';
 import PerfettoReporter from '../reporters/perfetto';
+import SmoothDeployReporter from '../reporters/smoothdeploy';
 import { wrapReporterAsV2 } from '../reporters/reporterV2';
 
 import type { ReporterDescription } from '../../types/test';
@@ -54,6 +55,7 @@ export async function createReporters(config: FullConfigInternal, mode: 'list' |
     'null': EmptyReporter,
     'html': HtmlReporter,
     'coverage': CoverageReporter,
+    'smoothdeploy': SmoothDeployReporter,
   };
   const reporters: ReporterV2[] = [];
   descriptions ??= config.config.reporter;

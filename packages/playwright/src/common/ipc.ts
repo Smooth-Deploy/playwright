@@ -117,6 +117,12 @@ export type TestEndPayload = {
   timeout: number;
 };
 
+export type ReporterStepFields = {
+  _stepId?: string;
+  _apiName?: string;
+  _channelMethod?: string;
+};
+
 export type StepBeginPayload = {
   testId: string;
   stepId: string;
@@ -127,6 +133,8 @@ export type StepBeginPayload = {
   params?: Record<string, any>;
   wallTime: number;  // milliseconds since unix epoch
   location?: { file: string, line: number, column: number };
+  apiName?: string;
+  channelMethod?: string;
 };
 
 export type StepEndPayload = {

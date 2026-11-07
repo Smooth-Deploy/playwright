@@ -101,6 +101,7 @@ interface ExpectStep {
 export interface ExpectTestInfo {
   _addStep(data: {
     category: 'expect';
+    apiName?: string;
     title: string;
     subtitle?: string;
     params?: Record<string, any>;
@@ -339,8 +340,10 @@ function callMatcherAsStep(matcherName: string, info: ExpectMetaInfo, actual: un
   const params: Record<string, any> = { ...suffixes.params };
   if (args[0])
     params.expected = args[0];
+  const apiName = `expect${info.poll ? '.poll ' : ''}${info.isSoft ? '.soft ' : ''}${info.isNot ? '.not' : ''}.${matcherName}${suffixes.titleSuffix || ''}`;
   const stepData = {
     category: 'expect' as const,
+    apiName,
     title,
     subtitle: suffixes.subtitle,
     stack: stackFrames,
