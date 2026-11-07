@@ -18,8 +18,8 @@
 
 import type { Progress } from './progress';
 
-import type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, HttpCredentials, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, OPFSEntry, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, SetVirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
-export type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, HttpCredentials, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, OPFSEntry, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, SetVirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
+import type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, ScriptStep, WaitInfo, HttpCredentials, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, OPFSEntry, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, SetVirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
+export type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, ScriptStep, WaitInfo, HttpCredentials, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, OPFSEntry, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, SetVirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
 
 // ----------- Initializer Traits -----------
 export type InitializerTraits<T> =
@@ -4872,6 +4872,8 @@ export type DebugControllerSourceChangedEvent = {
   header?: string,
   footer?: string,
   actions?: string[],
+  steps?: ScriptStep[],
+  actionIndex?: number,
 };
 export type DebugControllerPausedEvent = {
   paused: boolean,
