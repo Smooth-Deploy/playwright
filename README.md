@@ -1,3 +1,5 @@
+> Fork of [microsoft/playwright](https://github.com/microsoft/playwright) maintained by [SmoothDeploy](https://smoothdeploy.com). Tracks upstream releases and adds a few features the SmoothDeploy test builder needs. See [FORK.md](https://github.com/Smooth-Deploy/playwright/blob/main/FORK.md) for what differs.
+
 # 🎭 Playwright
 
 [![npm version](https://img.shields.io/npm/v/playwright.svg)](https://www.npmjs.com/package/playwright) <!-- GEN:chromium-version-badge -->[![Chromium version](https://img.shields.io/badge/chromium-158.0.8127.18-blue.svg?logo=google-chrome)](https://www.chromium.org/Home)<!-- GEN:stop --> <!-- GEN:firefox-version-badge -->[![Firefox version](https://img.shields.io/badge/firefox-159.0-blue.svg?logo=firefoxbrowser)](https://www.mozilla.org/en-US/firefox/new/)<!-- GEN:stop --> <!-- GEN:webkit-version-badge -->[![WebKit version](https://img.shields.io/badge/webkit-27.2-blue.svg?logo=safari)](https://webkit.org/)<!-- GEN:stop --> [![Join Discord](https://img.shields.io/badge/join-discord-informational)](https://aka.ms/playwright/discord)
