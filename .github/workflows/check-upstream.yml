@@ -1,0 +1,33 @@
+name: Check upstream release
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compare fork version with upstream latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          upstream=$(gh api repos/microsoft/playwright/releases/latest --jq .tag_name)
+          fork="v$(jq -r .version package.json)"
+          echo "upstream=$upstream fork=$fork"
+          newest=$(printf '%s\n%s\n' "$upstream" "$fork" | sort -V | tail -1)
+          if [ "$newest" = "$fork" ]; then
+            echo "up to date"; exit 0
+          fi
+          title="Upstream playwright $upstream released (fork at $fork)"
+          if gh issue list --state open --search "in:title \"$title\"" --json title --jq '.[].title' | grep -Fxq "$title"; then
+            echo "issue already open"; exit 0
+          fi
+          gh issue create --title "$title" --body "$(printf 'Upstream released %s; fork is at %s.\n\nRebase per FORK.md.\n\nRelease notes: https://github.com/microsoft/playwright/releases/tag/%s' "$upstream" "$fork" "$upstream")"

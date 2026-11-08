@@ -1,0 +1,46 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - run: npm run build
+      - name: Set version from tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          node utils/workspace.js --set-version "$version"
+      - name: Publish @smoothdeploy/playwright-core
+        working-directory: packages/playwright-core
+        run: |
+          npm pkg set name="@smoothdeploy/playwright-core" repository.url="git+https://github.com/Smooth-Deploy/playwright.git" homepage="https://smoothdeploy.com"
+          npm publish --access public
+      - name: Publish @smoothdeploy/playwright
+        working-directory: packages/playwright
+        run: |
+          npm pkg set name="@smoothdeploy/playwright" repository.url="git+https://github.com/Smooth-Deploy/playwright.git" homepage="https://smoothdeploy.com" dependencies.playwright-core="npm:@smoothdeploy/playwright-core@$VERSION"
+          npm publish --access public
+      - name: Publish @smoothdeploy/playwright-test
+        working-directory: packages/playwright-test
+        run: |
+          npm pkg set name="@smoothdeploy/playwright-test" repository.url="git+https://github.com/Smooth-Deploy/playwright.git" homepage="https://smoothdeploy.com" dependencies.playwright="npm:@smoothdeploy/playwright@$VERSION"
+          npm publish --access public
