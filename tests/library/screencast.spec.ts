@@ -299,7 +299,7 @@ test('video started after recorder grew the screencast keeps default size', asyn
   const page = await context.newPage();
   await page.setContent('<button>b</button>');
   let recorded = false;
-  await (context as any)._enableRecorder({ mode: 'recording', recorderMode: 'api' }, { actionAdded: () => recorded = true });
+  await (context as any)._startRecording({}, { actionAdded: () => recorded = true });
   await page.click('button');
   await expect.poll(() => recorded).toBe(true);
   const videoPath = testInfo.outputPath('grown-video.webm');
